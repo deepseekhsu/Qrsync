@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>QR 掃描 + 去中心化同步 + 匯出</title>
+  <script src="https://unpkg.com/gun/gun.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    #reader { width: 300px; margin-bottom: 20px; }
+    ul { list-style: none; padding-left: 0; }
+  </style>
+</head>
+<body>
+  <h2>QR 掃描 + 去中心化同步</h2>
+
+  <div id="reader"></div>
+  <button onclick="startScan()">開始掃描</button>
+  <button onclick="exportToTxt()">匯出 .txt</button>
+
+  <ul id="log"></ul>
+
+  <script>
+    const gun = Gun();
+    const scanLog = gun.get('qr-scan-log');
+    const records = []; // 本地儲存已同步資料
+
+    // 顯示紀錄 & 儲存至陣列
+    scanLog.map().on(data => {
+      if (!data || document.getElementById(data.timestamp)) return;
+      const li = document.createElement('li');
+      li.id = data.timestamp;
+      li.textContent = `[${data.timestamp}] ${data.content}`;
+      document.getElementById('log').prepend(li);
+      records.push(`[${data.timestamp}] ${data.content}`);
+    });
+
+    // 掃描 QR 時加入資料
+    function addScanRecord(content) {
+      const timestamp = new Date().toISOString();
+      scanLog.set({ content, timestamp });
+    }
+
+    let html5QrCode;
+    function startScan() {
+      html5QrCode = new Html5Qrcode("reader");
+      Html5Qrcode.getCameras().then(cameras => {
+        if (cameras.length) {
+          html5QrCode.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 250 },
+            (decodedText) => {
+              addScanRecord(decodedText);
+              html5QrCode.stop();
+              document.getElementById("reader").innerHTML = "";
+            },
+            (error) => {}
+          );
+        }
+      });
+    }
+
+    // 匯出為 txt 檔
+    function exportToTxt() {
+      const blob = new Blob([records.join('\n')], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'qr_records.txt';
+      a.click();
+    }
+  </script>
+</body>
+</html>
